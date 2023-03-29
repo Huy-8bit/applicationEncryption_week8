@@ -18,12 +18,14 @@ int main() {
     // in ra chuoi m (so thap luc phan)
     printHex(m);
     // in ra chuoi c (so thap luc phan)
-    c = CBCRandomEncrypt(m, k);
-    printHex(c);
+
+    // c = CBCRandomEncrypt(m, k);
+    // printHex(c);
+
     // in ra chuoi m (so thap luc phan)
     // m = CBCRandomDecrypt(c, k);
     // printHex(m);
-    
+
 
     return 0;
 }

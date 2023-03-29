@@ -264,6 +264,7 @@ int main() {
     printf("Ciphertext: ");
     for (int i = 0; i < padded_len; i++) {
         printf("%02x", ciphertext[i]);
+        cout << " ";
     }
     printf("\n");
 

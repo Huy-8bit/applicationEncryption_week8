@@ -1,13 +1,18 @@
 #include <iostream>
+#include <cstring>
+#include <cstdint>
 #include <string>
+#include <vector>
+#include <algorithm>
+#include <iomanip>
+
 
 using namespace std;
 
-// AES round constant table
-const unsigned char Rcon[11] = {
-    0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36, 0x6C
-};
 
+const uint8_t rcon[] = {
+0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36
+};
 
 static const uint8_t sbox[256] = {
     // 0     1     2     3     4     5     6     7
@@ -45,129 +50,236 @@ static const uint8_t sbox[256] = {
     0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68,
     0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16 }; // F
 
-// SubBytes: substitution using the S-box
-void subBytes(unsigned char* state) {
+// Define the AES block size
+const int AES_BLOCK_SIZE = 16;
+
+// Define the AES key size
+const int AES_KEY_SIZE = 16;
+
+// Define the number of rounds in AES-128
+const int AES_ROUNDS = 10;
+
+const uint8_t inv_sbox[] = {
+};
+
+// Define the key schedule function to generate round keys
+void key_schedule(const uint8_t* key, uint8_t* round_keys)
+{
+    uint8_t temp[4];
+    uint8_t i, j, k;
+    // Copy the original key to the first 16 bytes of round_keys
+    for (i = 0; i < 16; i++) {
+        round_keys[i] = key[i];
+    }
+
+    // Generate the remaining round keys
+    for (i = 1, j = 0; i < 11; i++) {
+        // Copy the previous 4 bytes to temp
+        for (k = 0; k < 4; k++) {
+            temp[k] = round_keys[(i - 1) * 16 + 12 + k];
+        }
+
+        // Apply the key schedule core
+        if (i % 4 == 0) {
+            // Rotate the temp word by 1 byte
+            uint8_t t = temp[0];
+            for (k = 0; k < 3; k++) {
+                temp[k] = temp[k + 1];
+            }
+            temp[3] = t;
+
+            // Apply the S-box to each byte
+            for (k = 0; k < 4; k++) {
+                temp[k] = sbox[temp[k]];
+            }
+
+            // XOR the first byte with the round constant
+            temp[0] ^= rcon[(i / 4) - 1];
+        }
+
+        // XOR temp with the 4-byte block at the end of the previous round key
+        for (k = 0; k < 4; k++) {
+            round_keys[i * 16 + k] = round_keys[(i - 1) * 16 + k] ^ temp[k];
+        }
+
+        // XOR the remaining 12 bytes with the corresponding bytes in the previous round key
+        for (k = 4; k < 16; k++) {
+            round_keys[i * 16 + k] = round_keys[(i - 1) * 16 + k] ^ round_keys[i * 16 + k - 4];
+        }
+    }
+}
+uint8_t gf_mul(uint8_t a, uint8_t b) {
+    uint8_t p = 0;
+    for (int i = 0; i < 8; i++) {
+        if (b & 1) {
+            p ^= a;
+        }
+        uint8_t high_bit = a & 0x80;
+        a <<= 1;
+        if (high_bit) {
+            a ^= 0x1b;
+        }
+        b >>= 1;
+    }
+    return p;
+}
+
+// Define the encryption function
+void aes_encrypt(const uint8_t* plaintext, const uint8_t* key, uint8_t* ciphertext)
+{
+    uint8_t state[4][4];
+    uint8_t round_keys[176];
+    uint8_t i, j, k, round;
+    // Generate the round keys from the key
+    key_schedule(key, round_keys);
+
+    // Copy the plaintext into the state array
+    for (i = 0; i < 4; i++) {
+        for (j = 0; j < 4; j++) {
+            state[j][i] = plaintext[i * 4 + j];
+        }
+    }
+
+    // Add the first round key to the state
+    for (i = 0; i < 16; i++) {
+        state[i % 4][i / 4] ^= round_keys[i];
+    }
+
+    // Perform the 9 main rounds
+    for (round = 1; round <= 9; round++) {
+        // Substitute each byte in the state with the corresponding byte in the S-box
+        for (i = 0; i < 4; i++) {
+            for (j = 0; j < 4; j++) {
+                state[i][j] = sbox[state[i][j]];
+            }
+        }
+        // Shift the rows of the state
+        for (i = 1; i < 4; i++) {
+            for (j = 0; j < i; j++) {
+                uint8_t t = state[i][0];
+                for (k = 0; k < 3; k++) {
+                    state[i][k] = state[i][k + 1];
+                }
+                state[i][3] = t;
+            }
+        }
+
+        // Mix the columns of the state using the Galois field multiplication
+        for (i = 0; i < 4; i++) {
+            uint8_t s0 = state[0][i];
+            uint8_t s1 = state[1][i];
+            uint8_t s2 = state[2][i];
+            uint8_t s3 = state[3][i];
+
+            state[0][i] = gf_mul(s0, 0x02) ^ gf_mul(s1, 0x03) ^ s2 ^ s3;
+            state[1][i] = s0 ^ gf_mul(s1, 0x02) ^ gf_mul(s2, 0x03) ^ s3;
+            state[2][i] = s0 ^ s1 ^ gf_mul(s2, 0x02) ^ gf_mul(s3, 0x03);
+            state[3][i] = gf_mul(s0, 0x03) ^ s1 ^ s2 ^ gf_mul(s3, 0x02);
+        }
+
+        // Add the round key to the state
+        for (i = 0; i < 16; i++) {
+            state[i % 4][i / 4] ^= round_keys[round * 16 + i];
+        }
+    }
+
+    // Perform the final round
+    // Substitute each byte in the state with the corresponding byte in the S-box
+    for (i = 0; i < 4; i++) {
+        for (j = 0; j < 4; j++) {
+            state[i][j] = sbox[state[i][j]];
+        }
+    }
+
+    // Shift the rows of the state
+    for (i = 1; i < 4; i++) {
+        for (j = 0; j < i; j++) {
+            uint8_t t = state[i][0];
+            for (k = 0; k < 3; k++) {
+                state[i][k] = state[i][k + 1];
+            }
+            state[i][3] = t;
+        }
+    }
+
+    // Add the final round key to the state
+    for (i = 0; i < 16; i++) {
+        state[i % 4][i / 4] ^= round_keys[160 + i];
+    }
+
+    // Copy the state into the ciphertext array
+    for (i = 0; i < 4; i++) {
+        for (j = 0; j < 4; j++) {
+            ciphertext[i * 4 + j] = state[j][i];
+        }
+    }
+}
+
+
+// int main()
+// {
+//     // Define the plaintext and key
+//     uint8_t plaintext[16] = {
+//         0x32, 0x88, 0x31, 0xe0,
+//         0x43, 0x5a, 0x31, 0x37,
+//         0xf6, 0x30, 0x98, 0x07,
+//         0xa8, 0x8d, 0xa2, 0x34
+//     };
+//     uint8_t key[16] = {
+//         0x2b, 0x7e, 0x15, 0x16,
+//         0x28, 0xae, 0xd2, 0xa6,
+//         0xab, 0xf7, 0x15, 0x88,
+//         0x09, 0xcf, 0x4f, 0x3c
+//     };
+
+//     // Encrypt the plaintext using AES-128
+//     uint8_t ciphertext[16];
+//     aes_encrypt(plaintext, key, ciphertext);
+
+//     // Print the ciphertext
+//     cout << "Ciphertext: ";
+//     for (int i = 0; i < 16; i++) {
+//         cout << hex << setw(2) << setfill('0') << (int)ciphertext[i] << " ";
+//     }
+//     cout << endl;
+
+//     return 0;
+// }
+
+
+int main()
+{
+    // Define the plaintext and key as strings
+    string plaintext_str = "This is a plaintext message.";
+    string key_str = "This is a secret key.";
+    
+    // Convert the plaintext and key to uint8_t arrays
+    const uint8_t* plaintext = reinterpret_cast<const uint8_t*>(plaintext_str.data());
+    const uint8_t* key = reinterpret_cast<const uint8_t*>(key_str.data());
+    
+    // Print the plaintext and key as uint8_t arrays
+    cout << "Plaintext: ";
+    for (int i = 0; i < plaintext_str.size(); i++) {
+        cout << hex << (int)plaintext[i] << " ";
+    }
+    cout << endl;
+    
+    cout << "Key: ";
+    for (int i = 0; i < key_str.size(); i++) {
+        cout << hex << (int)key[i] << " ";
+    }
+    cout << endl;
+    
+    // Encrypt the plaintext using AES-128
+    uint8_t ciphertext[16];
+    aes_encrypt(plaintext, key, ciphertext);
+    
+    // Print the ciphertext
+    cout << "Ciphertext: ";
     for (int i = 0; i < 16; i++) {
-        state[i] = sbox[state[i]];
+        cout << hex << setw(2) << setfill('0') << (int)ciphertext[i];
     }
-}
-
-// ShiftRows: cyclically shift each row
-void shiftRows(unsigned char* state) {
-    unsigned char tmp[16];
-    memcpy(tmp, state, 16);
-    for (int r = 0; r < 4; r++) {
-        for (int c = 0; c < 4; c++) {
-            tmp[4 * r + c] = state[4 * r + (c + r) % 4];
-        }
-    }
-    memcpy(state, tmp, 16);
-}
-
-
-// MixColumns: matrix multiplication over GF(2^8)
-uint8_t gf_mul(uint8_t value) {
-    if (value < 0x80) {
-        return static_cast<uint8_t>((value << 1) & 0xFF);
-    }
-    else {
-        return static_cast<uint8_t>((value << 1) ^ 0x1B);
-    }
-}
-
-void mixColumns(unsigned char* state) {
-    unsigned char tmp[16];
-    for (int c = 0; c < 4; c++) {
-        tmp[4 * c + 0] = gf_mul(state[4 * c + 0]) ^ gf_mul(state[4 * c + 1]) ^ state[4 * c + 2] ^ state[4 * c + 3];
-        tmp[4 * c + 1] = state[4 * c + 0] ^ gf_mul(state[4 * c + 1]) ^ gf_mul(state[4 * c + 2]) ^ state[4 * c + 3];
-        tmp[4 * c + 2] = state[4 * c + 0] ^ state[4 * c + 1] ^ gf_mul(state[4 * c + 2]) ^ gf_mul(state[4 * c + 3]);
-        tmp[4 * c + 3] = gf_mul(state[4 * c + 0]) ^ state[4 * c + 1] ^ state[4 * c + 2] ^ gf_mul(state[4 * c + 3]);
-    }
-    memcpy(state, tmp, 16);
-}
-
-// AddRoundKey: XOR with the round key
-void addRoundKey(unsigned char* state, unsigned char* key) {
-    for (int i = 0; i < 16; i++) {
-        state[i] ^= key[i];
-    }
-}
-
-// KeyExpansion: generate the round keys
-void keyExpansion(unsigned char* key, unsigned char* roundKey) {
-    unsigned char tmp[4], t;
-    const int Nk = 4, Nr = 10;
-    const int Nb = 4;
-    unsigned char Rcon[11] = { 0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36 };
-    for (int i = 0; i < Nk; i++) {
-        roundKey[4 * i + 0] = key[4 * i + 0];
-        roundKey[4 * i + 1] = key[4 * i + 1];
-        roundKey[4 * i + 2] = key[4 * i + 2];
-        roundKey[4 * i + 3] = key[4 * i + 3];
-    }
-
-    for (int i = Nk; i < Nb * (Nr + 1); i++) {
-        tmp[0] = roundKey[4 * (i - 1) + 0];
-        tmp[1] = roundKey[4 * (i - 1) + 1];
-        tmp[2] = roundKey[4 * (i - 1) + 2];
-        tmp[3] = roundKey[4 * (i - 1) + 3];
-
-        if (i % Nk == 0)
-        {
-            t = tmp[0];
-            tmp[0] = sbox[tmp[1]] ^ Rcon[i / Nk];
-            tmp[1] = sbox[tmp[2]];
-            tmp[2] = sbox[tmp[3]];
-            tmp[3] = sbox[t];
-        }
-        else if (Nk > 6 && i % Nk == 4) {
-            tmp[0] = sbox[tmp[0]];
-            tmp[1] = sbox[tmp[1]];
-            tmp[2] = sbox[tmp[2]];
-            tmp[3] = sbox[tmp[3]];
-        }
-        roundKey[4 * i + 0] = roundKey[4 * (i - Nk) + 0] ^ tmp[0];
-        roundKey[4 * i + 1] = roundKey[4 * (i - Nk) + 1] ^ tmp[1];
-        roundKey[4 * i + 2] = roundKey[4 * (i - Nk) + 2] ^ tmp[2];
-        roundKey[4 * i + 3] = roundKey[4 * (i - Nk) + 3] ^ tmp[3];
-    }
-}
-
-// AES encryption function
-void aes_encrypt(unsigned char* message, unsigned char* key, unsigned char* ciphertext) {
-    unsigned char state[16];
-    unsigned char roundKey[176];
-    memcpy(state, message, 16);
-    keyExpansion(key, roundKey);
-    addRoundKey(state, key);
-    for (int i = 1; i <= 10; i++) {
-        subBytes(state);
-        shiftRows(state);
-        if (i < 10) {
-            mixColumns(state);
-        }
-        addRoundKey(state, roundKey + 16 * i);
-    }
-    memcpy(ciphertext, state, 16);
-}
-
-int main() {
-    unsigned char message[] = "Two One Nine Two";
-    unsigned char key[] = "Thats my Kung Fu";
-    unsigned char ciphertext[16];
-    unsigned char decrypted[16];
-    aes_encrypt(message, key, ciphertext);
-    // aes_decrypt(ciphertext, key, decrypted);
-
-    printf("Original message: %s\n", message);
-    printf("Encrypted message: ");
-    for (int i = 0; i < 16; i++) {
-        printf("%02x", ciphertext[i]);
-        cout << " ";
-    }
-    printf("\n");
-
-    // printf("Decrypted message: %s\n", decrypted);
-
+    cout << endl;
+    
     return 0;
 }

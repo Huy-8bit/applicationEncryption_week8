@@ -247,8 +247,8 @@ void aes_decrypt(unsigned char* ciphertext, int ciphertext_len, unsigned char* k
 
 
 int main() {
-    unsigned char message[] = "Two One Nine Two";
-    unsigned char key[] = "Thats my Kung Fu";
+    unsigned char message[] = "0123456789abcdef";
+    unsigned char key[] = "0123456789abcdef";
     // iv
     unsigned char iv[] = "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00";
     int message_len = strlen((const char*)message);

@@ -7,9 +7,9 @@
       "request": "launch",
       "args": [],
       "stopAtEntry": false,
-      "externalConsole": false,
-      "cwd": "/Users/huy8bit/Desktop/DRIVE/DEV/application encryption/applicationEncryption_week8",
-      "program": "/Users/huy8bit/Desktop/DRIVE/DEV/application encryption/applicationEncryption_week8/build/Debug/outDebug",
+      "externalConsole": true,
+      "cwd": "d:/DEV/application encryption/week 8",
+      "program": "d:/DEV/application encryption/week 8/build/Debug/outDebug",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [

@@ -4,6 +4,7 @@
 #include <string>
 #include <cstdint>
 #include <cstring>
+
 using namespace std;
 
 // S-box
@@ -230,17 +231,19 @@ vector<unsigned char> aes128(string m, string key)
     return ciphertext;
 }
 
+int main() {
+
+    string key = "0123456789abcdef";
+    string plaintext = "0123456789abcdef";
+    unsigned char encryptedData[16];
+
+    vector<unsigned char> ciphertext = aes128(plaintext, key);
+
+    for (int i = 0; i < 16; i++) {
+        cout << hex << (int)encryptedData[i] << " ";
+    }
 
 
-// test
+    return 0;
+}
 
-// int main() {
-//     string key = "0123456789abcdef";
-//     string plaintext = "0123456789abcdef";
-//     vector<unsigned char> ciphertext = aes128(plaintext, key);
-//     for (int i = 0; i < ciphertext.size(); i++) {
-//         cout << hex << (int)ciphertext[i] << " ";
-//     }
-//     cout << endl;
-//     return 0;
-// }

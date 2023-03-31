@@ -234,13 +234,13 @@ vector<unsigned char> aes128(string m, string key)
 
 // test
 
-int main() {
-    string key = "0123456789abcdef";
-    string plaintext = "0123456789abcdef";
-    vector<unsigned char> ciphertext = aes128(plaintext, key);
-    for (int i = 0; i < ciphertext.size(); i++) {
-        cout << hex << (int)ciphertext[i] << " ";
-    }
-    cout << endl;
-    return 0;
-}
+// int main() {
+//     string key = "0123456789abcdef";
+//     string plaintext = "0123456789abcdef";
+//     vector<unsigned char> ciphertext = aes128(plaintext, key);
+//     for (int i = 0; i < ciphertext.size(); i++) {
+//         cout << hex << (int)ciphertext[i] << " ";
+//     }
+//     cout << endl;
+//     return 0;
+// }
